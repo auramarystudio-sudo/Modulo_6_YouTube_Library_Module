@@ -52,6 +52,10 @@ export default function VideoForm({ video, onSave, onClose }) {
         estado: video.estado || 'pendiente_ver',
         valoracion: video.valoracion || 0
       });
+      // Si hay tags sugeridos, mostrarlos
+      if (video.tags && video.tags.length > 0) {
+        setTagInput('');
+      }
     }
   }, [video]);
 

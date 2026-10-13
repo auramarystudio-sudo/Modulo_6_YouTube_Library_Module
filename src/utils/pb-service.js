@@ -1,11 +1,10 @@
 // ============================================
-// Servicio de PocketBase - Módulo 6
-// Maneja la conexión con PocketBase o modo demo
+// Servicio de PocketBase - Módulo 6 (MEJORADO)
+// Soporte para colecciones, sync offline y más
 // ============================================
 
 import PocketBase from 'pocketbase';
 
-// Intentar conectar a PocketBase (si está disponible)
 let pb = null;
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL || 'http://127.0.0.1:8090';
 
@@ -38,7 +37,8 @@ let demoVideos = [
     ],
     fecha_guardado: '2024-01-15',
     estado: 'visto',
-    valoracion: 5
+    valoracion: 5,
+    coleccion_id: 'col-1'
   },
   {
     id: 'demo-2',
@@ -59,7 +59,8 @@ let demoVideos = [
     ],
     fecha_guardado: '2024-01-20',
     estado: 'visto',
-    valoracion: 4
+    valoracion: 4,
+    coleccion_id: 'col-1'
   },
   {
     id: 'demo-3',
@@ -81,7 +82,8 @@ let demoVideos = [
     ],
     fecha_guardado: '2024-02-01',
     estado: 'favorito',
-    valoracion: 5
+    valoracion: 5,
+    coleccion_id: 'col-1'
   },
   {
     id: 'demo-4',
@@ -102,7 +104,8 @@ let demoVideos = [
     ],
     fecha_guardado: '2024-02-10',
     estado: 'pendiente_ver',
-    valoracion: 0
+    valoracion: 0,
+    coleccion_id: 'col-2'
   },
   {
     id: 'demo-5',
@@ -123,7 +126,8 @@ let demoVideos = [
     ],
     fecha_guardado: '2024-02-15',
     estado: 'visto',
-    valoracion: 4
+    valoracion: 4,
+    coleccion_id: 'col-2'
   },
   {
     id: 'demo-6',
@@ -144,21 +148,98 @@ let demoVideos = [
     ],
     fecha_guardado: '2024-02-20',
     estado: 'pendiente_ver',
-    valoracion: 3
+    valoracion: 3,
+    coleccion_id: null
+  },
+  {
+    id: 'demo-7',
+    video_id: 'ghi12345678',
+    titulo: 'Curso Completo de LLMs con LangChain - Desde Cero',
+    canal: 'Dev AI Lab',
+    url: 'https://youtube.com/watch?v=ghi12345678',
+    thumbnail: 'https://img.youtube.com/vi/ghi12345678/maxresdefault.jpg',
+    duracion: '1:32:00',
+    categoria: 'tutorial_avanzado',
+    tags: ['langchain', 'llm', 'python', 'framework', 'desarrollo'],
+    notas_personales: 'Curso extenso pero muy completo. Cubre chains, agents, memory y RAG.',
+    timestamps_clave: [
+      { tiempo: '0:00', descripcion: 'Introducción a LangChain' },
+      { tiempo: '15:00', descripcion: 'Primeros chains' },
+      { tiempo: '35:00', descripcion: 'Agents y tools' },
+      { tiempo: '55:00', descripcion: 'Memory y contexto' },
+      { tiempo: '1:10:00', descripcion: 'RAG con documentos' }
+    ],
+    fecha_guardado: '2024-03-01',
+    estado: 'visto',
+    valoracion: 5,
+    coleccion_id: 'col-3'
+  },
+  {
+    id: 'demo-8',
+    video_id: 'jkl87654321',
+    titulo: 'ElevenLabs - Clonación de Voz con IA en 2024',
+    canal: 'Voice Tech',
+    url: 'https://youtube.com/watch?v=jkl87654321',
+    thumbnail: 'https://img.youtube.com/vi/jkl87654321/maxresdefault.jpg',
+    duracion: '19:45',
+    categoria: 'tutorial_basico',
+    tags: ['elevenlabs', 'voz', 'tts', 'clonacion', 'audio'],
+    notas_personales: 'Resultados impresionantes con poca muestra de audio. API fácil de integrar.',
+    timestamps_clave: [
+      { tiempo: '0:00', descripcion: 'Qué es ElevenLabs' },
+      { tiempo: '4:00', descripcion: 'Crear cuenta y API key' },
+      { tiempo: '8:30', descripcion: 'Primera clonación' },
+      { tiempo: '14:00', descripcion: 'Integración con código' }
+    ],
+    fecha_guardado: '2024-03-05',
+    estado: 'favorito',
+    valoracion: 5,
+    coleccion_id: 'col-3'
   }
 ];
 
-let nextId = 7;
+// Colecciones demo
+let demoColecciones = [
+  {
+    id: 'col-1',
+    nombre: 'Ruta Stable Diffusion',
+    descripcion: 'Aprende Stable Diffusion desde cero hasta nivel profesional',
+    color: 'purple',
+    icono: '🎨',
+    orden: ['demo-1', 'demo-2', 'demo-3'],
+    fecha_creacion: '2024-01-10'
+  },
+  {
+    id: 'col-2',
+    nombre: 'Comparativas y Reviews',
+    descripcion: 'Análisis de los principales modelos de IA',
+    color: 'blue',
+    icono: '📊',
+    orden: ['demo-5', 'demo-4'],
+    fecha_creacion: '2024-02-01'
+  },
+  {
+    id: 'col-3',
+    nombre: 'Herramientas de Desarrollo',
+    descripcion: 'LangChain, ElevenLabs y más herramientas para devs',
+    color: 'green',
+    icono: '🛠️',
+    orden: ['demo-7', 'demo-8'],
+    fecha_creacion: '2024-03-01'
+  }
+];
+
+let nextId = 9;
+let nextColId = 4;
+
+// Cola de sincronización offline
+let syncQueue = [];
 
 // ============================================
-// Funciones del servicio
+// Funciones de Videos
 // ============================================
 
-/**
- * Obtiene todos los videos ordenados por fecha de guardado (más recientes primero)
- */
 export async function obtenerVideos() {
-  // Intentar con PocketBase real
   if (pb) {
     try {
       const records = await pb.collection('youtube_videos').getFullList({
@@ -169,16 +250,11 @@ export async function obtenerVideos() {
       console.warn('PocketBase no disponible, usando modo demo');
     }
   }
-  
-  // Fallback: modo demo
   return [...demoVideos].sort((a, b) => 
     new Date(b.fecha_guardado) - new Date(a.fecha_guardado)
   );
 }
 
-/**
- * Crea un nuevo video en la biblioteca
- */
 export async function crearVideo(videoData) {
   if (pb) {
     try {
@@ -186,10 +262,9 @@ export async function crearVideo(videoData) {
       return record;
     } catch (e) {
       console.warn('PocketBase no disponible, usando modo demo');
+      syncQueue.push({ action: 'create', data: videoData });
     }
   }
-  
-  // Fallback: modo demo
   const nuevoVideo = {
     ...videoData,
     id: `demo-${nextId++}`,
@@ -199,9 +274,6 @@ export async function crearVideo(videoData) {
   return nuevoVideo;
 }
 
-/**
- * Actualiza un video existente
- */
 export async function actualizarVideo(id, videoData) {
   if (pb) {
     try {
@@ -209,10 +281,9 @@ export async function actualizarVideo(id, videoData) {
       return record;
     } catch (e) {
       console.warn('PocketBase no disponible, usando modo demo');
+      syncQueue.push({ action: 'update', id, data: videoData });
     }
   }
-  
-  // Fallback: modo demo
   const index = demoVideos.findIndex(v => v.id === id);
   if (index !== -1) {
     demoVideos[index] = { ...demoVideos[index], ...videoData };
@@ -221,9 +292,6 @@ export async function actualizarVideo(id, videoData) {
   throw new Error('Video no encontrado');
 }
 
-/**
- * Elimina un video de la biblioteca
- */
 export async function eliminarVideo(id) {
   if (pb) {
     try {
@@ -231,10 +299,159 @@ export async function eliminarVideo(id) {
       return true;
     } catch (e) {
       console.warn('PocketBase no disponible, usando modo demo');
+      syncQueue.push({ action: 'delete', id });
+    }
+  }
+  demoVideos = demoVideos.filter(v => v.id !== id);
+  return true;
+}
+
+// ============================================
+// Funciones de Colecciones
+// ============================================
+
+export async function obtenerColecciones() {
+  if (pb) {
+    try {
+      return await pb.collection('colecciones').getFullList({ sort: 'nombre' });
+    } catch (e) {
+      console.warn('PocketBase no disponible, usando modo demo');
+    }
+  }
+  return [...demoColecciones];
+}
+
+export async function crearColeccion(data) {
+  if (pb) {
+    try {
+      return await pb.collection('colecciones').create(data);
+    } catch (e) {
+      console.warn('PocketBase no disponible, usando modo demo');
+    }
+  }
+  const nueva = {
+    ...data,
+    id: `col-${nextColId++}`,
+    orden: data.orden || [],
+    fecha_creacion: new Date().toISOString().split('T')[0]
+  };
+  demoColecciones.push(nueva);
+  return nueva;
+}
+
+export async function actualizarColeccion(id, data) {
+  if (pb) {
+    try {
+      return await pb.collection('colecciones').update(id, data);
+    } catch (e) {
+      console.warn('PocketBase no disponible, usando modo demo');
+    }
+  }
+  const index = demoColecciones.findIndex(c => c.id === id);
+  if (index !== -1) {
+    demoColecciones[index] = { ...demoColecciones[index], ...data };
+    return demoColecciones[index];
+  }
+  throw new Error('Colección no encontrada');
+}
+
+export async function eliminarColeccion(id) {
+  if (pb) {
+    try {
+      await pb.collection('colecciones').delete(id);
+      return true;
+    } catch (e) {
+      console.warn('PocketBase no disponible, usando modo demo');
+    }
+  }
+  demoColecciones = demoColecciones.filter(c => c.id !== id);
+  // Quitar referencia de los videos
+  demoVideos = demoVideos.map(v => 
+    v.coleccion_id === id ? { ...v, coleccion_id: null } : v
+  );
+  return true;
+}
+
+export async function añadirVideoAColeccion(coleccionId, videoId) {
+  const col = demoColecciones.find(c => c.id === coleccionId);
+  if (col && !col.orden.includes(videoId)) {
+    col.orden.push(videoId);
+  }
+  const video = demoVideos.find(v => v.id === videoId);
+  if (video) {
+    video.coleccion_id = coleccionId;
+  }
+  return true;
+}
+
+export async function quitarVideoDeColeccion(coleccionId, videoId) {
+  const col = demoColecciones.find(c => c.id === coleccionId);
+  if (col) {
+    col.orden = col.orden.filter(id => id !== videoId);
+  }
+  const video = demoVideos.find(v => v.id === videoId);
+  if (video && video.coleccion_id === coleccionId) {
+    video.coleccion_id = null;
+  }
+  return true;
+}
+
+export async function reordenarColeccion(coleccionId, nuevoOrden) {
+  const col = demoColecciones.find(c => c.id === coleccionId);
+  if (col) {
+    col.orden = nuevoOrden;
+  }
+  return true;
+}
+
+// ============================================
+// Sincronización
+// ============================================
+
+export async function sincronizarPendientes() {
+  if (!pb || syncQueue.length === 0) return { exitosos: 0, fallidos: 0 };
+  
+  let exitosos = 0;
+  let fallidos = 0;
+  const nuevaCola = [];
+  
+  for (const item of syncQueue) {
+    try {
+      if (item.action === 'create') {
+        await pb.collection('youtube_videos').create(item.data);
+      } else if (item.action === 'update') {
+        await pb.collection('youtube_videos').update(item.id, item.data);
+      } else if (item.action === 'delete') {
+        await pb.collection('youtube_videos').delete(item.id);
+      }
+      exitosos++;
+    } catch (e) {
+      nuevaCola.push(item);
+      fallidos++;
     }
   }
   
-  // Fallback: modo demo
-  demoVideos = demoVideos.filter(v => v.id !== id);
-  return true;
+  syncQueue = nuevaCola;
+  return { exitosos, fallidos };
+}
+
+export function obtenerColaSync() {
+  return [...syncQueue];
+}
+
+// ============================================
+// Importar/Exportar
+// ============================================
+
+export async function importarVideos(videosImportados) {
+  const resultados = [];
+  for (const video of videosImportados) {
+    try {
+      const nuevo = await crearVideo(video);
+      resultados.push({ video, success: true, id: nuevo.id });
+    } catch (e) {
+      resultados.push({ video, success: false, error: e.message });
+    }
+  }
+  return resultados;
 }
