@@ -101,3 +101,31 @@ export function tiempoASegundos(tiempo) {
   }
   return parseInt(tiempo) || 0;
 }
+
+/**
+ * Obtiene información del video usando YouTube oEmbed API
+ * Retorna: { titulo, canal, thumbnail_url }
+ * No requiere API key, es gratuito y sin límites estrictos
+ */
+export async function obtenerInfoVideo(videoId) {
+  try {
+    const response = await fetch(
+      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Video no encontrado o privado');
+    }
+    
+    const data = await response.json();
+    
+    return {
+      titulo: data.title || '',
+      canal: data.author_name || '',
+      thumbnail: data.thumbnail_url || generarThumbnail(videoId)
+    };
+  } catch (error) {
+    console.error('Error al obtener info del video:', error);
+    throw new Error('No se pudo obtener la información del video. Verifica que sea público.');
+  }
+}

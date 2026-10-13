@@ -127,15 +127,15 @@ export default function YouTubeLibrary() {
     }
   };
 
-  // Importar desde URL
+  // Importar desde URL (con datos precargados de oEmbed)
   const handleImportar = (datos) => {
     setModalImporter(false);
     setModalForm({
       video_id: datos.video_id,
       url: datos.url,
       thumbnail: datos.thumbnail,
-      titulo: '',
-      canal: '',
+      titulo: datos.titulo || '',
+      canal: datos.canal || '',
       categoria: 'tutorial_basico',
       tags: [],
       notas_personales: '',

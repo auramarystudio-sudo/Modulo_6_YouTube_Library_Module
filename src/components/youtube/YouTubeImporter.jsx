@@ -1,35 +1,57 @@
 // ============================================
 // YouTubeImporter.jsx - Importador desde URL
-// Permite pegar URL y previsualizar antes de añadir
+// Obtiene título y canal automáticamente vía oEmbed
 // ============================================
 
 import { useState } from 'react';
 import { 
-  X, Link, Search, Plus, AlertCircle, Youtube
+  X, Link, Search, Plus, AlertCircle, Youtube, 
+  Loader2, CheckCircle2, Info
 } from 'lucide-react';
-import { extraerVideoId, generarThumbnail } from '../../utils/youtube-utils';
+import { 
+  extraerVideoId, generarThumbnail, obtenerInfoVideo 
+} from '../../utils/youtube-utils';
 
 export default function YouTubeImporter({ onImportar, onClose }) {
   const [url, setUrl] = useState('');
   const [videoId, setVideoId] = useState(null);
+  const [infoVideo, setInfoVideo] = useState(null); // { titulo, canal, thumbnail }
   const [analizando, setAnalizando] = useState(false);
   const [error, setError] = useState('');
 
-  // Analizar la URL pegada
-  const analizarURL = () => {
+  // Analizar la URL y obtener info del video vía oEmbed
+  const analizarURL = async () => {
     setError('');
+    setInfoVideo(null);
     setAnalizando(true);
 
-    setTimeout(() => {
-      const id = extraerVideoId(url);
-      if (id) {
-        setVideoId(id);
-      } else {
-        setError('No se pudo extraer un ID de video válido de la URL');
-        setVideoId(null);
-      }
+    const id = extraerVideoId(url);
+    
+    if (!id) {
+      setError('No se pudo extraer un ID de video válido de la URL');
+      setVideoId(null);
       setAnalizando(false);
-    }, 500);
+      return;
+    }
+
+    setVideoId(id);
+
+    try {
+      // Obtener título y canal automáticamente desde oEmbed
+      const info = await obtenerInfoVideo(id);
+      setInfoVideo(info);
+    } catch (err) {
+      // Si falla oEmbed, al menos tenemos el ID y thumbnail
+      setInfoVideo({
+        titulo: '',
+        canal: '',
+        thumbnail: generarThumbnail(id)
+      });
+      // No mostramos error si oEmbed falla, el usuario puede completar manualmente
+      console.warn('oEmbed no disponible, datos manuales:', err.message);
+    }
+
+    setAnalizando(false);
   };
 
   // Importar a la biblioteca (abre el formulario precargado)
@@ -38,12 +60,14 @@ export default function YouTubeImporter({ onImportar, onClose }) {
       onImportar({
         video_id: videoId,
         url: url.startsWith('http') ? url : `https://youtube.com/watch?v=${videoId}`,
-        thumbnail: generarThumbnail(videoId)
+        thumbnail: infoVideo?.thumbnail || generarThumbnail(videoId),
+        titulo: infoVideo?.titulo || '',
+        canal: infoVideo?.canal || ''
       });
     }
   };
 
-  const thumbnailUrl = videoId ? generarThumbnail(videoId) : '';
+  const thumbnailUrl = infoVideo?.thumbnail || (videoId ? generarThumbnail(videoId) : '');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -84,6 +108,7 @@ export default function YouTubeImporter({ onImportar, onClose }) {
                 onChange={(e) => {
                   setUrl(e.target.value);
                   setVideoId(null);
+                  setInfoVideo(null);
                   setError('');
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && analizarURL()}
@@ -96,11 +121,26 @@ export default function YouTubeImporter({ onImportar, onClose }) {
                 disabled={!url || analizando}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition shadow-lg disabled:opacity-50"
               >
-                <Search className="w-4 h-4" />
+                {analizando ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Search className="w-4 h-4" />
+                )}
                 {analizando ? '...' : 'Analizar'}
               </button>
             </div>
           </div>
+
+          {/* Estado de análisis */}
+          {analizando && (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-slate-800/30 border border-slate-700/30">
+              <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+              <div>
+                <p className="text-sm text-slate-300 font-medium">Analizando video...</p>
+                <p className="text-xs text-slate-500">Obteniendo título y canal desde YouTube</p>
+              </div>
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -110,9 +150,9 @@ export default function YouTubeImporter({ onImportar, onClose }) {
             </div>
           )}
 
-          {/* Preview del video */}
-          {videoId && (
-            <div className="space-y-4 animate-in fade-in">
+          {/* Preview del video con datos obtenidos */}
+          {videoId && !analizando && (
+            <div className="space-y-4">
               {/* Thumbnail preview */}
               <div className="relative aspect-video rounded-xl overflow-hidden border border-slate-700/30">
                 <img
@@ -128,15 +168,56 @@ export default function YouTubeImporter({ onImportar, onClose }) {
                 </div>
               </div>
 
-              {/* Info */}
-              <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-4">
-                <p className="text-sm text-slate-400 mb-1">
-                  ✅ Video detectado correctamente
-                </p>
-                <p className="text-xs text-slate-500">
-                  Se abrirá el formulario para completar los detalles del video.
-                </p>
-              </div>
+              {/* Info obtenida automáticamente */}
+              {infoVideo && (
+                <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-4 space-y-3">
+                  {/* Datos obtenidos */}
+                  {infoVideo.titulo && (
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs text-emerald-400 font-medium mb-0.5">Título detectado</p>
+                        <p className="text-sm text-slate-200">{infoVideo.titulo}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {infoVideo.canal && (
+                    <div className="flex items-start gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs text-emerald-400 font-medium mb-0.5">Canal detectado</p>
+                        <p className="text-sm text-slate-200">{infoVideo.canal}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Si no se pudo obtener datos */}
+                  {!infoVideo.titulo && !infoVideo.canal && (
+                    <div className="flex items-start gap-2">
+                      <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs text-amber-400 font-medium mb-0.5">Datos no disponibles</p>
+                        <p className="text-xs text-slate-500">
+                          No se pudo obtener el título y canal automáticamente. 
+                          Podrás completarlos manualmente en el formulario.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nota sobre la categoría */}
+                  <div className="flex items-start gap-2 pt-2 border-t border-slate-700/20">
+                    <Info className="w-4 h-4 text-cyan-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-cyan-400 font-medium mb-0.5">Categoría personalizada</p>
+                      <p className="text-xs text-slate-500">
+                        La categoría la seleccionarás en el formulario según tu sistema de organización.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Botón importar */}
               <button
@@ -144,20 +225,22 @@ export default function YouTubeImporter({ onImportar, onClose }) {
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-medium transition shadow-lg"
               >
                 <Plus className="w-4 h-4" />
-                Añadir a Biblioteca
+                {infoVideo?.titulo ? 'Continuar con datos detectados' : 'Añadir a Biblioteca'}
               </button>
             </div>
           )}
 
           {/* Instrucciones */}
-          {!videoId && !error && (
+          {!videoId && !error && !analizando && (
             <div className="bg-slate-800/20 border border-slate-700/20 rounded-xl p-4">
               <p className="text-xs text-slate-500 leading-relaxed">
                 <strong className="text-slate-400">Formatos soportados:</strong><br />
                 • https://youtube.com/watch?v=VIDEO_ID<br />
                 • https://youtu.be/VIDEO_ID<br />
                 • https://youtube.com/shorts/VIDEO_ID<br />
-                • VIDEO_ID (11 caracteres directamente)
+                • VIDEO_ID (11 caracteres directamente)<br /><br />
+                <strong className="text-emerald-400">✨ Detección automática:</strong><br />
+                El título y canal se obtienen automáticamente del video de YouTube.
               </p>
             </div>
           )}

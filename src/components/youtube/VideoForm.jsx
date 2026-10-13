@@ -34,7 +34,7 @@ export default function VideoForm({ video, onSave, onClose }) {
   const [imgError, setImgError] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Si estamos editando, precargar datos
+  // Si estamos editando o importando, precargar datos
   useEffect(() => {
     if (video) {
       setFormData({
@@ -54,6 +54,9 @@ export default function VideoForm({ video, onSave, onClose }) {
       });
     }
   }, [video]);
+
+  // Detectar si es un video importado (tiene video_id pero no id de BD)
+  const esImportado = video && !video.id && video.video_id;
 
   // Auto-extraer video_id al cambiar la URL
   const handleUrlChange = (url) => {
@@ -208,8 +211,13 @@ export default function VideoForm({ video, onSave, onClose }) {
           {/* Título y Canal */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-slate-300 mb-1.5 block">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-1.5">
                 Título *
+                {esImportado && formData.titulo && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/30">
+                    Auto-detectado
+                  </span>
+                )}
               </label>
               <input
                 type="text"
@@ -221,8 +229,13 @@ export default function VideoForm({ video, onSave, onClose }) {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-slate-300 mb-1.5 block">
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-300 mb-1.5">
                 Canal *
+                {esImportado && formData.canal && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950/50 text-emerald-400 border border-emerald-800/30">
+                    Auto-detectado
+                  </span>
+                )}
               </label>
               <input
                 type="text"
