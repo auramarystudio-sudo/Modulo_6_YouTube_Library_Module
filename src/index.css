@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/* ============================================
+   Glassmorphism Dark Pro v3.0
+   Sistema de diseño global
+   ============================================ */
+
+/* Variables CSS personalizadas */
+:root {
+  /* Colores primarios */
+  --color-primary-cyan: #06b6d4;
+  --color-primary-purple: #a855f7;
+  --color-primary-pink: #ec4899;
+  
+  /* Colores secundarios */
+  --color-secondary-green: #10b981;
+  --color-secondary-yellow: #eab308;
+  --color-secondary-blue: #3b82f6;
+  --color-secondary-red: #ef4444;
+  --color-secondary-amber: #f59e0b;
+  --color-secondary-indigo: #6366f1;
+  --color-secondary-rose: #f43f5e;
+  
+  /* Colores neutros */
+  --color-neutral-950: #020617;
+  --color-neutral-900: #0f172a;
+  --color-neutral-800: #1e293b;
+  --color-neutral-700: #334155;
+  --color-neutral-600: #475569;
+  --color-neutral-500: #64748b;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-200: #e2e8f0;
+  --color-neutral-100: #f1f5f9;
+}
+
+/* Fondo principal */
+body {
+  background: linear-gradient(to bottom right, var(--color-neutral-950), var(--color-neutral-900), var(--color-neutral-950));
+  color: var(--color-neutral-100);
+  min-height: 100vh;
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.5);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.7);
+}
+
+/* Selección de texto */
+::selection {
+  background: rgba(6, 182, 212, 0.3);
+  color: var(--color-neutral-100);
+}
+
+/* Focus visible mejorado */
+*:focus-visible {
+  outline: 2px solid rgba(6, 182, 212, 0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Animaciones suaves globales */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Clases utilitarias personalizadas */
+@layer components {
+  /* Card Principal */
+  .glass-card {
+    @apply bg-slate-900/50 border border-slate-800/50 rounded-2xl p-6 backdrop-blur-sm shadow-xl;
+  }
+  
+  /* Card Flotante (Modal) */
+  .glass-card-floating {
+    @apply bg-slate-900/95 border border-slate-800/50 rounded-2xl backdrop-blur-xl shadow-2xl;
+  }
+  
+  /* Input */
+  .glass-input {
+    @apply w-full bg-slate-800/50 border border-slate-700/50 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 transition;
+  }
+  
+  /* Botón Primario */
+  .glass-btn-primary {
+    @apply flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition shadow-lg;
+  }
+  
+  /* Botón Premium */
+  .glass-btn-premium {
+    @apply flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-medium transition shadow-lg;
+  }
+  
+  /* Botón Secundario */
+  .glass-btn-secondary {
+    @apply p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition;
+  }
+  
+  /* Badge */
+  .glass-badge {
+    @apply text-xs px-2 py-1 rounded-md bg-purple-950/50 text-purple-300 border border-purple-800/30;
+  }
+  
+  /* Título con gradiente */
+  .glass-title {
+    @apply text-xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent;
+  }
+  
+  /* Header */
+  .glass-header {
+    @apply border-b border-slate-800/50 bg-slate-900/90 backdrop-blur-xl sticky top-0 z-40 shadow-lg;
+  }
+}
+
+/* Efectos de hover mejorados */
+@layer utilities {
+  .hover-lift {
+    @apply transition-transform duration-200 hover:-translate-y-0.5;
+  }
+  
+  .hover-glow-cyan {
+    @apply transition-shadow duration-200 hover:shadow-lg hover:shadow-cyan-500/20;
+  }
+  
+  .hover-glow-purple {
+    @apply transition-shadow duration-200 hover:shadow-lg hover:shadow-purple-500/20;
+  }
+}
+
+/* Animaciones personalizadas */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
