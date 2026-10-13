@@ -1,15 +1,16 @@
 // ============================================
-// YouTubeLibrary.jsx - Componente principal (MEJORADO)
-// + Ordenamiento + Colecciones + Cine + Export/Import
-// + Toggle favorito + Notas inline + Animaciones + Temas color
+// YouTubeLibrary.jsx - Componente principal (MEJORADO v3)
+// + Flashcards + Slideshow + Feed + QR + Atajos + Búsqueda semántica
 // ============================================
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, Plus, AlertCircle, Loader2, Youtube, 
   LayoutGrid, List, BookOpen, ArrowUpDown, 
-  FolderOpen, Download, Sparkles, Palette, Film
+  FolderOpen, Download, Sparkles, Palette, Film,
+  Brain, Presentation, Radio, QrCode, FileText,
+  Keyboard
 } from 'lucide-react';
 import VideoCard from './VideoCard';
 import VideoDetail from './VideoDetail';
@@ -19,7 +20,14 @@ import CategoryFilter from './CategoryFilter';
 import CineView from './CineView';
 import Collections from './Collections';
 import ExportImport from './ExportImport';
+import Flashcards from './Flashcards';
+import Slideshow from './Slideshow';
+import ChannelFeed from './ChannelFeed';
+import QRCodeModal from './QRCodeModal';
 import { CATEGORIAS, ORDENAMIENTOS, generarResumenIA } from '../../utils/youtube-utils';
+import { busquedaSemantica } from '../../utils/busqueda-semantica';
+import { bibliotecaAMarkdown, descargarMarkdown } from '../../utils/export-markdown';
+import { useKeyboardShortcuts, ATAJOS_DISPONIBLES } from '../../hooks/useKeyboardShortcuts';
 import { 
   obtenerVideos, crearVideo, actualizarVideo, eliminarVideo,
   obtenerColecciones
@@ -37,6 +45,7 @@ export default function YouTubeLibrary() {
   const [filtroCategoria, setFiltroCategoria] = useState(null);
   const [ordenamiento, setOrdenamiento] = useState('fecha_desc');
   const [coleccionActiva, setColeccionActiva] = useState(null);
+  const [busquedaSemanticaActiva, setBusquedaSemanticaActiva] = useState(false);
   
   // Modales
   const [modalDetalle, setModalDetalle] = useState(null);
@@ -45,10 +54,19 @@ export default function YouTubeLibrary() {
   const [modalCine, setModalCine] = useState(null);
   const [modalCollections, setModalCollections] = useState(false);
   const [modalExportImport, setModalExportImport] = useState(false);
+  const [modalFlashcards, setModalFlashcards] = useState(false);
+  const [modalSlideshow, setModalSlideshow] = useState(false);
+  const [modalChannelFeed, setModalChannelFeed] = useState(false);
+  const [modalQR, setModalQR] = useState(null);
+  const [modalAtajos, setModalAtajos] = useState(false);
   
   // Vista
   const [vistaGrid, setVistaGrid] = useState(true);
   const [temaColor, setTemaColor] = useState(false);
+  const [videoSeleccionado, setVideoSeleccionado] = useState(0);
+  
+  // Refs
+  const busquedaRef = useRef(null);
 
   // Cargar datos al montar
   useEffect(() => {
@@ -72,6 +90,59 @@ export default function YouTubeLibrary() {
     }
   };
 
+  // Atajos de teclado
+  const modalAbierto = modalDetalle || modalForm || modalImporter || modalCine || 
+                       modalCollections || modalExportImport || modalFlashcards || 
+                       modalSlideshow || modalChannelFeed || modalQR;
+
+  useKeyboardShortcuts({
+    modalAbierto: !!modalAbierto,
+    siguiente: () => setVideoSeleccionado(prev => Math.min(prev + 1, videosFiltrados.length - 1)),
+    anterior: () => setVideoSeleccionado(prev => Math.max(prev - 1, 0)),
+    abrirDetalle: () => {
+      if (videosFiltrados[videoSeleccionado]) {
+        setModalDetalle(videosFiltrados[videoSeleccionado]);
+      }
+    },
+    abrirCine: () => {
+      if (videosFiltrados[videoSeleccionado]) {
+        setModalCine(videosFiltrados[videoSeleccionado]);
+      }
+    },
+    toggleFavorito: () => {
+      if (videosFiltrados[videoSeleccionado]) {
+        handleToggleFavorito(videosFiltrados[videoSeleccionado]);
+      }
+    },
+    focusBusqueda: () => {
+      busquedaRef.current?.focus();
+    },
+    nuevoVideo: () => setModalImporter(true),
+    cerrarModal: () => {
+      setModalDetalle(null);
+      setModalForm(null);
+      setModalImporter(false);
+      setModalCine(null);
+      setModalCollections(false);
+      setModalExportImport(false);
+      setModalFlashcards(false);
+      setModalSlideshow(false);
+      setModalChannelFeed(false);
+      setModalQR(null);
+      setModalAtajos(false);
+    },
+    eliminar: () => {
+      if (videosFiltrados[videoSeleccionado]) {
+        handleEliminarVideo(videosFiltrados[videoSeleccionado]);
+      }
+    },
+    editar: () => {
+      if (videosFiltrados[videoSeleccionado]) {
+        setModalForm(videosFiltrados[videoSeleccionado]);
+      }
+    }
+  }, !modalAbierto);
+
   // Filtrar y ordenar videos
   const videosFiltrados = useMemo(() => {
     let resultado = [...videos];
@@ -91,41 +162,47 @@ export default function YouTubeLibrary() {
       resultado = resultado.filter(v => v.categoria === filtroCategoria);
     }
 
-    // Filtro por búsqueda
+    // Búsqueda (semántica o normal)
     if (busqueda.trim()) {
-      const termino = busqueda.toLowerCase();
-      resultado = resultado.filter(v => 
-        v.titulo.toLowerCase().includes(termino) ||
-        v.canal.toLowerCase().includes(termino) ||
-        (v.tags && v.tags.some(tag => tag.toLowerCase().includes(termino))) ||
-        (v.notas_personales && v.notas_personales.toLowerCase().includes(termino))
-      );
+      if (busquedaSemanticaActiva) {
+        resultado = busquedaSemantica(resultado, busqueda);
+      } else {
+        const termino = busqueda.toLowerCase();
+        resultado = resultado.filter(v => 
+          v.titulo.toLowerCase().includes(termino) ||
+          v.canal.toLowerCase().includes(termino) ||
+          (v.tags && v.tags.some(tag => tag.toLowerCase().includes(termino))) ||
+          (v.notas_personales && v.notas_personales.toLowerCase().includes(termino))
+        );
+      }
     }
 
-    // Ordenamiento
-    switch (ordenamiento) {
-      case 'fecha_desc':
-        resultado.sort((a, b) => new Date(b.fecha_guardado) - new Date(a.fecha_guardado));
-        break;
-      case 'fecha_asc':
-        resultado.sort((a, b) => new Date(a.fecha_guardado) - new Date(b.fecha_guardado));
-        break;
-      case 'titulo_asc':
-        resultado.sort((a, b) => a.titulo.localeCompare(b.titulo));
-        break;
-      case 'titulo_desc':
-        resultado.sort((a, b) => b.titulo.localeCompare(a.titulo));
-        break;
-      case 'valoracion_desc':
-        resultado.sort((a, b) => (b.valoracion || 0) - (a.valoracion || 0));
-        break;
-      case 'canal_asc':
-        resultado.sort((a, b) => a.canal.localeCompare(b.canal));
-        break;
+    // Ordenamiento (solo si no es búsqueda semántica, que ya ordena por relevancia)
+    if (!busquedaSemanticaActiva || !busqueda.trim()) {
+      switch (ordenamiento) {
+        case 'fecha_desc':
+          resultado.sort((a, b) => new Date(b.fecha_guardado) - new Date(a.fecha_guardado));
+          break;
+        case 'fecha_asc':
+          resultado.sort((a, b) => new Date(a.fecha_guardado) - new Date(b.fecha_guardado));
+          break;
+        case 'titulo_asc':
+          resultado.sort((a, b) => a.titulo.localeCompare(b.titulo));
+          break;
+        case 'titulo_desc':
+          resultado.sort((a, b) => b.titulo.localeCompare(a.titulo));
+          break;
+        case 'valoracion_desc':
+          resultado.sort((a, b) => (b.valoracion || 0) - (a.valoracion || 0));
+          break;
+        case 'canal_asc':
+          resultado.sort((a, b) => a.canal.localeCompare(b.canal));
+          break;
+      }
     }
 
     return resultado;
-  }, [videos, colecciones, filtroCategoria, busqueda, ordenamiento, coleccionActiva]);
+  }, [videos, colecciones, filtroCategoria, busqueda, ordenamiento, coleccionActiva, busquedaSemanticaActiva]);
 
   // Conteos por categoría
   const conteos = useMemo(() => {
@@ -173,7 +250,6 @@ export default function YouTubeLibrary() {
     }
   };
 
-  // Toggle favorito
   const handleToggleFavorito = async (video) => {
     const nuevoEstado = video.estado === 'favorito' ? 'pendiente_ver' : 'favorito';
     try {
@@ -184,7 +260,6 @@ export default function YouTubeLibrary() {
     }
   };
 
-  // Actualizar notas inline
   const handleActualizarNotas = async (videoId, notas) => {
     try {
       await actualizarVideo(videoId, { notas_personales: notas });
@@ -194,7 +269,6 @@ export default function YouTubeLibrary() {
     }
   };
 
-  // Resumen IA
   const handleResumirIA = async (videoId, resumen) => {
     try {
       const video = videos.find(v => v.id === videoId);
@@ -209,12 +283,10 @@ export default function YouTubeLibrary() {
     }
   };
 
-  // Importar videos (soporta individual y masivo)
   const handleImportar = (datosArray, esMasivo = false) => {
     setModalImporter(false);
     
     if (esMasivo) {
-      // Importación masiva: crear todos directamente
       (async () => {
         for (const datos of datosArray) {
           await crearVideo({
@@ -230,7 +302,6 @@ export default function YouTubeLibrary() {
         await cargarDatos();
       })();
     } else {
-      // Individual: abrir formulario precargado
       const datos = datosArray[0];
       setModalForm({
         video_id: datos.video_id,
@@ -249,30 +320,50 @@ export default function YouTubeLibrary() {
     }
   };
 
-  // Abrir modo cine
   const handleAbrirCine = (video) => {
     setModalCine(video);
   };
 
+  // Exportar a Markdown
+  const handleExportarMarkdown = () => {
+    const contenido = bibliotecaAMarkdown(videosFiltrados);
+    const fecha = new Date().toISOString().split('T')[0];
+    descargarMarkdown(contenido, `biblioteca-youtube-${fecha}`);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Barra superior: búsqueda + acciones */}
+      {/* Barra superior */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         {/* Búsqueda */}
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input
+            ref={busquedaRef}
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por título, canal, tags, notas..."
-            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg pl-10 pr-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 transition text-sm"
+            placeholder="Buscar por título, canal, tags, notas... (presiona / para enfocar)"
+            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg pl-10 pr-20 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 transition text-sm"
           />
+          {busqueda && (
+            <button
+              onClick={() => setBusquedaSemanticaActiva(!busquedaSemanticaActiva)}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 rounded text-xs transition ${
+                busquedaSemanticaActiva
+                  ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                  : 'bg-slate-800/50 text-slate-500 hover:text-slate-300 border border-slate-700/30'
+              }`}
+              title="Búsqueda semántica por conceptos"
+            >
+              <Sparkles className="w-3 h-3" />
+              Semántica
+            </button>
+          )}
         </div>
 
         {/* Controles de vista */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Toggle grid/lista */}
           <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-800/50 border border-slate-700/50">
             <button
               onClick={() => setVistaGrid(true)}
@@ -290,20 +381,16 @@ export default function YouTubeLibrary() {
             </button>
           </div>
 
-          {/* Toggle tema color */}
           <button
             onClick={() => setTemaColor(!temaColor)}
             className={`p-2 rounded-lg border transition ${
-              temaColor 
-                ? 'bg-purple-600/20 border-purple-500/30 text-purple-400' 
-                : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-white'
+              temaColor ? 'bg-purple-600/20 border-purple-500/30 text-purple-400' : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-white'
             }`}
-            title="Temas de color por categoría"
+            title="Temas de color"
           >
             <Palette className="w-4 h-4" />
           </button>
 
-          {/* Ordenamiento */}
           <div className="relative">
             <select
               value={ordenamiento}
@@ -321,6 +408,34 @@ export default function YouTubeLibrary() {
         {/* Botones de acción */}
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setModalAtajos(true)}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white transition"
+            title="Atajos de teclado"
+          >
+            <Keyboard className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setModalFlashcards(true)}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white transition"
+            title="Flashcards"
+          >
+            <Brain className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setModalSlideshow(true)}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white transition"
+            title="Presentación"
+          >
+            <Presentation className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setModalChannelFeed(true)}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white transition"
+            title="Feed de canales"
+          >
+            <Radio className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => setModalCollections(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white text-xs font-medium transition"
             title="Colecciones"
@@ -329,9 +444,16 @@ export default function YouTubeLibrary() {
             <span className="hidden sm:inline">Colecciones</span>
           </button>
           <button
+            onClick={handleExportarMarkdown}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white transition"
+            title="Exportar a Markdown"
+          >
+            <FileText className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => setModalExportImport(true)}
             className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white transition"
-            title="Exportar/Importar"
+            title="Exportar/Importar JSON/CSV"
           >
             <Download className="w-4 h-4" />
           </button>
@@ -370,6 +492,13 @@ export default function YouTubeLibrary() {
             </p>
           </div>
           <button
+            onClick={() => setModalQR(coleccionActiva ? colecciones.find(c => c.id === coleccionActiva) : null)}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            title="Generar QR"
+          >
+            <QrCode className="w-4 h-4" />
+          </button>
+          <button
             onClick={() => setColeccionActiva(null)}
             className="text-xs text-purple-400 hover:text-purple-300 transition"
           >
@@ -406,18 +535,25 @@ export default function YouTubeLibrary() {
         }>
           <AnimatePresence>
             {videosFiltrados.map((video, index) => (
-              <VideoCard
+              <div
                 key={video.id}
-                video={video}
-                index={index}
-                onVerDetalle={setModalDetalle}
-                onEditar={(v) => setModalForm(v)}
-                onEliminar={handleEliminarVideo}
-                onToggleFavorito={handleToggleFavorito}
-                onActualizarNotas={handleActualizarNotas}
-                onAbrirCine={handleAbrirCine}
-                temaColor={temaColor}
-              />
+                className={`transition-all duration-200 ${
+                  index === videoSeleccionado ? 'ring-2 ring-cyan-500/50 rounded-2xl' : ''
+                }`}
+                onMouseEnter={() => setVideoSeleccionado(index)}
+              >
+                <VideoCard
+                  video={video}
+                  index={index}
+                  onVerDetalle={setModalDetalle}
+                  onEditar={(v) => setModalForm(v)}
+                  onEliminar={handleEliminarVideo}
+                  onToggleFavorito={handleToggleFavorito}
+                  onActualizarNotas={handleActualizarNotas}
+                  onAbrirCine={handleAbrirCine}
+                  temaColor={temaColor}
+                />
+              </div>
             ))}
           </AnimatePresence>
         </div>
@@ -468,13 +604,13 @@ export default function YouTubeLibrary() {
           <div className="flex items-center gap-3">
             {filtroCategoria && <span>Filtro: {CATEGORIAS[filtroCategoria]?.label}</span>}
             {coleccionActiva && <span className="flex items-center gap-1"><FolderOpen className="w-3 h-3" />Colección activa</span>}
+            {busquedaSemanticaActiva && busqueda && <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" />Búsqueda semántica</span>}
           </div>
         </div>
       )}
 
       {/* ===== MODALES ===== */}
 
-      {/* Modal detalle */}
       {modalDetalle && (
         <VideoDetail
           video={modalDetalle}
@@ -483,7 +619,6 @@ export default function YouTubeLibrary() {
         />
       )}
 
-      {/* Modal formulario */}
       {modalForm && (
         <VideoForm
           video={modalForm === 'nuevo' ? null : modalForm}
@@ -492,7 +627,6 @@ export default function YouTubeLibrary() {
         />
       )}
 
-      {/* Modal importador */}
       {modalImporter && (
         <YouTubeImporter
           onImportar={handleImportar}
@@ -500,7 +634,6 @@ export default function YouTubeLibrary() {
         />
       )}
 
-      {/* Vista Cine */}
       {modalCine && (
         <CineView
           video={modalCine}
@@ -513,7 +646,6 @@ export default function YouTubeLibrary() {
         />
       )}
 
-      {/* Modal colecciones */}
       {modalCollections && (
         <Collections
           videos={videos}
@@ -524,13 +656,70 @@ export default function YouTubeLibrary() {
         />
       )}
 
-      {/* Modal exportar/importar */}
       {modalExportImport && (
         <ExportImport
           videos={videos}
           onImportar={cargarDatos}
           onClose={() => setModalExportImport(false)}
         />
+      )}
+
+      {modalFlashcards && (
+        <Flashcards
+          videos={videos}
+          onClose={() => setModalFlashcards(false)}
+        />
+      )}
+
+      {modalSlideshow && (
+        <Slideshow
+          videos={videosFiltrados}
+          onClose={() => setModalSlideshow(false)}
+        />
+      )}
+
+      {modalChannelFeed && (
+        <ChannelFeed
+          videos={videos}
+          onClose={() => setModalChannelFeed(false)}
+        />
+      )}
+
+      {modalQR && (
+        <QRCodeModal
+          video={null}
+          coleccion={modalQR}
+          onClose={() => setModalQR(null)}
+        />
+      )}
+
+      {/* Modal de atajos de teclado */}
+      {modalAtajos && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setModalAtajos(false)} />
+          <div className="relative w-full max-w-md bg-slate-900/95 border border-slate-800/50 rounded-2xl p-6">
+            <h3 className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent mb-4 flex items-center gap-2">
+              <Keyboard className="w-5 h-5 text-cyan-400" />
+              Atajos de Teclado
+            </h3>
+            <div className="space-y-2">
+              {ATAJOS_DISPONIBLES.map((atajo, i) => (
+                <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-slate-800/30">
+                  <span className="text-sm text-slate-300">{atajo.descripcion}</span>
+                  <kbd className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-xs font-mono text-cyan-400">
+                    {atajo.tecla}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setModalAtajos(false)}
+              className="w-full mt-4 px-4 py-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white text-sm transition"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

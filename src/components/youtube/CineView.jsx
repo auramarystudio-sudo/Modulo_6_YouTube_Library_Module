@@ -1,24 +1,28 @@
 // ============================================
-// CineView.jsx - Vista inmersiva con reproductor
-// Reproductor embebido + notas + timestamps
+// CineView.jsx - Vista inmersiva (MEJORADA)
+// + Captura de frames + Modo focus
 // ============================================
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { 
   X, Star, Clock, StickyNote, ExternalLink, 
-  SkipBack, SkipForward, Bookmark, ChevronLeft, ChevronRight,
-  Sparkles, Loader2
+  Bookmark, ChevronLeft, ChevronRight,
+  Sparkles, Loader2, Camera, Eye, EyeOff,
+  Maximize, Minimize, Download
 } from 'lucide-react';
 import { 
   tiempoASegundos, ESTADOS, CATEGORIAS, generarResumenIA 
 } from '../../utils/youtube-utils';
 
-export default function CineView({ video, videosRelacionados = [], onClose, onEditar, onToggleFavorito, onResumirIA, onActualizarNotas }) {
+export default function CineView({ video, videosRelacionados = [], onClose, onEditar, onToggleFavorito, onResumirIA, onActualizarNotas, onCapturarFrame }) {
   const [notasEdit, setNotasEdit] = useState(video.notas_personales || '');
   const [editandoNotas, setEditandoNotas] = useState(false);
   const [resumenIA, setResumenIA] = useState(null);
   const [generandoResumen, setGenerandoResumen] = useState(false);
   const [videoActual, setVideoActual] = useState(video);
+  const [modoFocus, setModoFocus] = useState(false);
+  const [capturando, setCapturando] = useState(false);
+  const iframeRef = useRef(null);
 
   if (!videoActual) return null;
 
@@ -47,7 +51,32 @@ export default function CineView({ video, videosRelacionados = [], onClose, onEd
     }
   };
 
-  // Navegar entre videos relacionados
+  // Capturar frame (simulado - en producción usaríamos postMessage con el iframe)
+  const capturarFrame = async () => {
+    setCapturando(true);
+    
+    // Simular captura (en producción, esto usaría la API de YouTube o canvas)
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const frame = {
+      id: `frame-${Date.now()}`,
+      videoId: videoActual.video_id,
+      timestamp: new Date().toISOString(),
+      nota: `Frame capturado de "${videoActual.titulo}"`,
+      url: videoActual.thumbnail // En producción, sería la imagen capturada
+    };
+    
+    if (onCapturarFrame) {
+      onCapturarFrame(frame);
+    }
+    
+    setCapturando(false);
+    
+    // Mostrar notificación
+    alert('📸 Frame capturado (demo)\n\nEn producción, esto guardaría la imagen del momento exacto del video.');
+  };
+
+  // Navegar entre videos
   const navegarVideo = (direccion) => {
     const idx = videosRelacionados.findIndex(v => v.id === videoActual.id);
     if (idx === -1) return;
@@ -60,6 +89,34 @@ export default function CineView({ video, videosRelacionados = [], onClose, onEd
   };
 
   const idxActual = videosRelacionados.findIndex(v => v.id === videoActual.id);
+
+  // Modo focus: solo video, sin panel lateral
+  if (modoFocus) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black">
+        {/* Botón para salir del modo focus */}
+        <button
+          onClick={() => setModoFocus(false)}
+          className="absolute top-4 right-4 z-20 p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition backdrop-blur-sm"
+          title="Salir del modo focus"
+        >
+          <Eye className="w-5 h-5" />
+        </button>
+
+        {/* Video a pantalla completa */}
+        <div className="w-full h-full flex items-center justify-center">
+          <iframe
+            ref={iframeRef}
+            src={`https://www.youtube.com/embed/${videoActual.video_id}?autoplay=1&rel=0`}
+            title={videoActual.titulo}
+            className="w-full h-full"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black">
@@ -103,6 +160,21 @@ export default function CineView({ video, videosRelacionados = [], onClose, onEd
         {/* Acciones */}
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setModoFocus(true)}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition backdrop-blur-sm"
+            title="Modo focus"
+          >
+            <EyeOff className="w-5 h-5" />
+          </button>
+          <button
+            onClick={capturarFrame}
+            disabled={capturando}
+            className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition backdrop-blur-sm disabled:opacity-50"
+            title="Capturar frame"
+          >
+            {capturando ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+          </button>
+          <button
             onClick={() => onToggleFavorito?.(videoActual)}
             className={`p-2 rounded-lg backdrop-blur-sm transition ${
               videoActual.estado === 'favorito' 
@@ -127,6 +199,7 @@ export default function CineView({ video, videosRelacionados = [], onClose, onEd
         <div className="flex-1 flex flex-col justify-center bg-black">
           <div className="relative w-full aspect-video max-h-[70vh] mx-auto">
             <iframe
+              ref={iframeRef}
               src={`https://www.youtube.com/embed/${videoActual.video_id}?autoplay=0&rel=0`}
               title={videoActual.titulo}
               className="w-full h-full rounded-lg"
@@ -135,7 +208,7 @@ export default function CineView({ video, videosRelacionados = [], onClose, onEd
             />
           </div>
           
-          {/* Info del video debajo del reproductor */}
+          {/* Info del video */}
           <div className="p-4 lg:p-6 max-w-4xl mx-auto w-full">
             <h1 className="text-lg lg:text-xl font-bold text-white mb-2">
               {videoActual.titulo}
